@@ -71,7 +71,7 @@ fn main() {
     emulator.insert_instructions(4, instrs! {
         Add [R 0], [R 1]
     });
-    emulator.insert_instructions(4, instrs! {
+    emulator.insert_instructions(5, instrs! {
         Push [R 1]
     });
 
