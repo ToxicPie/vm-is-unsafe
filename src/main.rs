@@ -3,6 +3,8 @@
 #[macro_use]
 mod compiler;
 mod grammar;
+#[cfg(test)]
+mod test_pwn;
 mod vm;
 
 use compiler::{compile, Instruction, Opcode, Operand};
