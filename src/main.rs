@@ -1,29 +1,18 @@
-#![feature(iter_intersperse)]
-
 #[macro_use]
 mod compiler;
 mod grammar;
 #[cfg(test)]
 mod test_pwn;
 mod vm;
+mod utils;
 
 use compiler::{compile, Instruction, Opcode, Operand};
 use grammar::{Sentence, Token};
+use rand::SeedableRng;
 use vm::Emulator;
-
-fn print_sentence(tokens: &[Token]) {
-    println!(
-        "{}",
-        tokens
-            .iter()
-            .map(|x| x.to_string())
-            .intersperse(" ".to_string())
-            .collect::<String>()
-    )
-}
+use rand_chacha::ChaCha12Rng;
 
 fn parse_and_print(tokens: &[Token]) {
-    print_sentence(tokens);
     match Sentence::try_from(tokens) {
         Ok(sentence) => println!("{:#?}", sentence),
         Err(err) => println!("{}", err),
@@ -31,7 +20,6 @@ fn parse_and_print(tokens: &[Token]) {
 }
 
 fn parse_and_compile_and_print(tokens: &[Token]) {
-    print_sentence(tokens);
     match Sentence::try_from(tokens) {
         Ok(sentence) => {
             let instrs = compiler::compile(&sentence);
@@ -42,11 +30,11 @@ fn parse_and_compile_and_print(tokens: &[Token]) {
 }
 
 #[rustfmt::skip]
-fn main() {
-    // test parser and compiler from tokens
+fn vm_demo() {
     use Token::*;
+    // parse and compile from tokens
     parse_and_print(&[
-        Not, Not, Const(0x69), Above, Register(1), And, Not, Not, Not, Const(0x87), Is, Push, And, Not
+        Not, Not, Const(0x69), Above, Register(1), And, Not, Not, Not, Const(0x87), Is, Push, And, Not,
     ]);
     parse_and_print(&[
         Not, Not, Const(0x69), Above, Register(1), And, Not, Not, Not, Const(0x87), Is, Push, And, Not, Move,
@@ -58,28 +46,34 @@ fn main() {
     let mut emulator = Emulator::from_seed(1069);
     // add compiled sentences
     emulator.insert_instructions(0, compile(&Sentence::try_from(&[
-        Register(1), Become, Const(1),
+        Const(0), Become, Const(1),
     ][..]).unwrap()));
     emulator.insert_instructions(1, compile(&Sentence::try_from(&[
-        Register(1), Is, Not, Add,
-    ][..]).unwrap()));
-    emulator.insert_instructions(2, compile(&Sentence::try_from(&[
-        Const(42), Is, Win,
+        Register(1), Is, Add, And, Back,
     ][..]).unwrap()));
     // directly add assembly
-    emulator.insert_instructions(3, instrs! {
-        Move [R 2], (2)
-    });
-    emulator.insert_instructions(4, instrs! {
-        Add [R 0], [R 1]
-    });
-    emulator.insert_instructions(5, instrs! {
-        Push [R 1]
+    emulator.insert_instructions(2, instrs! {
+        Move [R 2], (2);
+        Add [R 0], [R 1];
+        Push [R 1];
     });
 
     // execute
     println!("score gained: {}", emulator.execute_all());
 
+    // debug
     println!("registers: {:#?}", emulator.memory.registers);
     println!("stack: {:?}", emulator.memory.stack);
+}
+
+fn random_demo() {
+    let mut rng = ChaCha12Rng::seed_from_u64(420);
+    for _ in 0..3 {
+        println!("randomly generated 2x2 block: {:?}", utils::generate_2x2_block(&mut rng));
+    }
+}
+
+fn main() {
+    vm_demo();
+    random_demo();
 }

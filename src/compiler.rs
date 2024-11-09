@@ -31,14 +31,14 @@ pub enum Opcode {
     JumpUnless,
     BanIf,
     BanIfExcept,
-    Syscall,
+    Win,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction {
     pub opcode: Opcode,
-    pub operand1: Operand,
-    pub operand2: Operand,
+    pub dst: Operand,
+    pub src: Operand,
 }
 
 macro_rules! operand {
@@ -64,15 +64,15 @@ macro_rules! instr {
     ($op:ident $x1:tt, $x2:tt) => {
         Instruction {
             opcode: Opcode::$op,
-            operand1: operand!($x1),
-            operand2: operand!($x2),
+            dst: operand!($x1),
+            src: operand!($x2),
         }
     };
     ($op:ident $x1:tt) => {
         Instruction {
             opcode: Opcode::$op,
-            operand1: operand!($x1),
-            operand2: operand!((0)),
+            dst: operand!((0)),
+            src: operand!($x1),
         }
     };
 }
@@ -96,7 +96,6 @@ impl From<&Noun> for Operand {
 }
 
 const TMP_REG: Operand = Operand::Register(config::GENERAL_REGISTER_COUNT as u8);
-const WIN_REG: Operand = Operand::Register(config::GENERAL_REGISTER_COUNT as u8 + 1);
 const ALWAYS_CMP: Instruction = instr! { Cmpe (0x0), (0x0) };
 
 fn make_conditional(subject: &Noun, modifier: &PrepositionalPhrase) -> Instruction {
@@ -156,8 +155,8 @@ fn compile_is_yes_yes(
         Adjective::Xor => instrs! { Xor [tmp], {src} },
         Adjective::Shr => instrs! { Shr [tmp], {src} },
         Adjective::Shl => instrs! { Shl [tmp], {src} },
-        Adjective::Win => instrs! { JumpUnless (0x1); Cmpe [win], {src}; Syscall (0x01) },
-        Adjective::Defeat => instrs! { Syscall (0xff) },
+        Adjective::Win => instrs! { Win {src} },
+        Adjective::Defeat => instrs! { JumpUnless (0x1); Cmpne (0x0), (0x0); Win {src} },
     };
     add_condition(instructions, subject, modifier)
 }

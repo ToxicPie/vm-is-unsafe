@@ -75,11 +75,11 @@ impl Emulator {
     fn eval_condition(&self, condition: Instruction) -> bool {
         let Instruction {
             opcode,
-            operand1,
-            operand2,
+            dst,
+            src,
         } = condition;
-        let val1 = self.eval_operand(operand1);
-        let val2 = self.eval_operand(operand2);
+        let val1 = self.eval_operand(dst);
+        let val2 = self.eval_operand(src);
         match opcode {
             Opcode::Cmpa => val1 > val2,
             Opcode::Cmpb => val1 < val2,
@@ -90,124 +90,117 @@ impl Emulator {
             _ => unreachable!(),
         }
     }
-    fn execute_const_or_reg<F>(&mut self, operand1: Operand, f: F)
+    fn execute_const_or_reg<F>(&mut self, dst: Operand, f: F)
     where
         F: Fn(u8) -> u8,
     {
-        let dst = self.eval_operand(operand1);
-        match operand1 {
-            Operand::Register(reg) => self.write_register(reg, f(dst)),
+        let dst_val = self.eval_operand(dst);
+        match dst {
+            Operand::Register(reg) => self.write_register(reg, f(dst_val)),
             Operand::Const(num) => {
                 for reg in 0..config::GENERAL_REGISTER_COUNT {
                     let reg = reg as u8;
                     if self.read_register(reg) == num {
-                        self.write_register(reg, f(dst));
+                        self.write_register(reg, f(dst_val));
                     }
                 }
             }
         }
-    }
-    fn execute_arithmetic(
-        &mut self,
-        opcode: Opcode,
-        operand1: Operand,
-        operand2: Operand,
-        ban_conditions: &[Instruction],
-    ) {
-        for condition in ban_conditions {
-            if self.eval_condition(*condition) {
-                return;
-            }
-        }
-        let src = self.eval_operand(operand2);
-        match opcode {
-            Opcode::Add => self.execute_const_or_reg(operand1, |dst| dst.wrapping_add(src)),
-            Opcode::Sub => self.execute_const_or_reg(operand1, |dst| dst.wrapping_sub(src)),
-            Opcode::Or => self.execute_const_or_reg(operand1, |dst| dst | src),
-            Opcode::Xor => self.execute_const_or_reg(operand1, |dst| dst ^ src),
-            Opcode::Shr => self.execute_const_or_reg(operand1, |dst| dst.wrapping_shr(src as u32)),
-            Opcode::Shl => self.execute_const_or_reg(operand1, |dst| dst.wrapping_shl(src as u32)),
-            _ => unreachable!(),
-        };
     }
     pub fn execute_all(&mut self) -> i64 {
         let mut ban_conditions_nums = vec![vec![vec![]; config::OPCODE_COUNT]; 256];
         let mut ban_conditions_regs =
             vec![vec![vec![]; config::OPCODE_COUNT]; config::TOTAL_REGISTER_COUNT];
         let mut score = 0i64;
+
         for instructions in self.instruction_cache.clone() {
             let mut instruction_stream = instructions.into_iter();
-            while let Some(Instruction {
-                opcode,
-                operand1,
-                operand2,
-            }) = instruction_stream.next()
-            {
+            while let Some(Instruction { opcode, dst, src }) = instruction_stream.next() {
+                let ban_conditions = match src {
+                    Operand::Register(reg) => {
+                        &ban_conditions_regs[reg as usize][opcode as usize]
+                    }
+                    Operand::Const(num) => {
+                        &ban_conditions_nums[num as usize][opcode as usize]
+                    }
+                };
+                let banned = ban_conditions
+                    .iter()
+                    .any(|condition| self.eval_condition(*condition));
+
                 match opcode {
-                    Opcode::Add
-                    | Opcode::Sub
-                    | Opcode::Or
-                    | Opcode::Xor
-                    | Opcode::Shr
-                    | Opcode::Shl => {
-                        let ban_conditions = match operand2 {
-                            Operand::Register(reg) => {
-                                &ban_conditions_regs[reg as usize][opcode as u8 as usize]
-                            }
-                            Operand::Const(num) => {
-                                &ban_conditions_nums[num as usize][opcode as u8 as usize]
-                            }
-                        };
-                        self.execute_arithmetic(opcode, operand1, operand2, ban_conditions);
+                    Opcode::Add if !banned => {
+                        let src = self.eval_operand(src);
+                        self.execute_const_or_reg(dst, |dst| dst.wrapping_add(src));
                     }
-                    Opcode::Move => {
-                        let src = self.eval_operand(operand2);
-                        self.execute_const_or_reg(operand1, |_dst| src);
+                    Opcode::Sub if !banned => {
+                        let src = self.eval_operand(src);
+                        self.execute_const_or_reg(dst, |dst| dst.wrapping_add(src));
                     }
-                    Opcode::Push => {
+                    Opcode::Or if !banned => {
+                        let src = self.eval_operand(src);
+                        self.execute_const_or_reg(dst, |dst| dst | src);
+                    }
+                    Opcode::Xor if !banned => {
+                        let src = self.eval_operand(src);
+                        self.execute_const_or_reg(dst, |dst| dst ^ src);
+                    }
+                    Opcode::Shr if !banned => {
+                        let src = self.eval_operand(src);
+                        self.execute_const_or_reg(dst, |dst| dst.wrapping_shr(src as u32));
+                    }
+                    Opcode::Shl if !banned => {
+                        let src = self.eval_operand(src);
+                        self.execute_const_or_reg(dst, |dst| dst.wrapping_shl(src as u32));
+                    }
+                    Opcode::Move if !banned => {
+                        let src = self.eval_operand(src);
+                        self.execute_const_or_reg(dst, |_dst| src);
+                    }
+                    Opcode::Push if !banned  => {
                         for idx in (1..config::STACK_SIZE as u8).rev() {
                             self.write_stack(idx, self.read_stack(idx - 1));
                         }
-                        self.write_stack(0, self.eval_operand(operand1));
+                        self.write_stack(0, self.eval_operand(src));
                     }
-                    Opcode::Pull => {
-                        let src = self.read_stack(0);
-                        self.execute_const_or_reg(operand1, |_dst| src);
+                    Opcode::Pull if !banned  => {
+                        let dst = self.read_stack(0);
+                        self.execute_const_or_reg(src, |_src| dst);
                         for idx in 1..config::STACK_SIZE as u8 {
                             self.write_stack(idx - 1, self.read_stack(idx));
                         }
                         self.write_stack(config::STACK_SIZE as u8 - 1, 0);
                     }
-                    Opcode::Swap => {
-                        let val1 = self.eval_operand(operand1);
-                        let val2 = self.eval_operand(operand2);
-                        self.execute_const_or_reg(operand1, |_dst| val2);
-                        self.execute_const_or_reg(operand2, |_dst| val1);
+                    Opcode::Swap if !banned  => {
+                        let val1 = self.eval_operand(dst);
+                        let val2 = self.eval_operand(src);
+                        self.execute_const_or_reg(dst, |_dst| val2);
+                        self.execute_const_or_reg(src, |_dst| val1);
                     }
                     Opcode::Load => {
-                        let src = self.read_stack(self.eval_operand(operand2));
-                        self.execute_const_or_reg(operand1, |_dst| src);
+                        let src = self.read_stack(self.eval_operand(src));
+                        self.execute_const_or_reg(dst, |_dst| src);
                     }
                     Opcode::Store => {
-                        let dst = self.eval_operand(operand1);
-                        let src = self.eval_operand(operand2);
+                        let dst = self.eval_operand(dst);
+                        let src = self.eval_operand(src);
                         self.write_stack(dst, src);
                     }
-                    Opcode::JumpUnless => {
+                    Opcode::JumpUnless if !banned => {
                         let condition = instruction_stream.next().unwrap();
                         if !self.eval_condition(condition) {
-                            for _ in 0..self.eval_operand(operand1) {
+                            for _ in 0..self.eval_operand(src) {
                                 instruction_stream.next();
                             }
                         }
                     }
-                    Opcode::BanIf => {
+                    Opcode::BanIf if !banned => {
                         let condition = instruction_stream.next().unwrap();
-                        let ban_vec = match operand1 {
+                        let ban_vec = match dst {
                             Operand::Register(reg) => &mut ban_conditions_regs[reg as usize],
                             Operand::Const(num) => &mut ban_conditions_nums[num as usize],
                         };
-                        let opcode = self.eval_operand(operand2);
+                        let opcode = self.eval_operand(src);
                         if opcode < (config::OPCODE_COUNT as u8) {
                             ban_vec[opcode as usize].push(condition);
                         } else {
@@ -218,10 +211,10 @@ impl Emulator {
                             }
                         }
                     }
-                    Opcode::BanIfExcept => {
+                    Opcode::BanIfExcept if !banned => {
                         let condition = instruction_stream.next().unwrap();
                         let ban = |ban_vec: &mut Vec<Vec<_>>| {
-                            let opcode = self.eval_operand(operand2);
+                            let opcode = self.eval_operand(src);
                             if opcode < (config::OPCODE_COUNT as u8) {
                                 ban_vec[opcode as usize].push(condition);
                             } else {
@@ -232,7 +225,7 @@ impl Emulator {
                                 }
                             }
                         };
-                        match operand1 {
+                        match dst {
                             Operand::Register(reg) => {
                                 for ban_reg in 0..config::GENERAL_REGISTER_COUNT as u8 {
                                     if ban_reg != reg {
@@ -243,21 +236,19 @@ impl Emulator {
                             Operand::Const(num) => {
                                 for ban_num in 0..=u8::MAX {
                                     if ban_num != num {
-                                        ban(&mut ban_conditions_nums[num as usize])
+                                        ban(&mut ban_conditions_nums[ban_num as usize])
                                     }
                                 }
                             }
                         };
                     }
-                    Opcode::Syscall => match operand1 {
-                        Operand::Const(0x01) => {
+                    Opcode::Win if !banned => {
+                        if self.eval_operand(src) == self.memory.registers.reg_win {
                             score = score.saturating_add(1);
                             self.refresh_win_value();
                         }
-                        Operand::Const(0xff) => score = score.saturating_sub(1),
-                        _ => {}
-                    },
-                    _ => unreachable!(),
+                    }
+                    _ => {}
                 }
             }
         }

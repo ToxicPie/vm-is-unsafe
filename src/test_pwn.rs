@@ -10,10 +10,11 @@ fn test_pwn() {
     };
 
     use Token::*;
+    add_sentence(&[Not, Const(0), Is, Push]);
     add_sentence(&[Const(39), Is, Push]);
     add_sentence(&[Register(1), Become, Const(0)]);
     add_sentence(&[Register(1), And, Register(1), Read, Register(1), And, Register(1)]);
-    add_sentence(&[Register(1), Is, Win]);
+    add_sentence(&[Register(1), Is, Defeat]);
 
     for _ in 0..1000 {
         let score = emulator.execute_all();
