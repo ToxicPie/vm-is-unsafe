@@ -43,7 +43,8 @@ fn vm_demo() {
         Not, Not, Const(0x69), Above, Register(1), And, Not, Not, Not, Const(0x87), Is, Push, And, Not, Move,
     ]);
 
-    let mut emulator = Emulator::from_seed(1069);
+    // default seed for game vm
+    let mut emulator = Emulator::from_seed(421);
     // add compiled sentences
     emulator.insert_instructions(0, compile(&Sentence::try_from(&[
         Const(0), Become, Const(1),
@@ -67,6 +68,7 @@ fn vm_demo() {
 }
 
 fn random_demo() {
+    // default seed for game generator
     let mut rng = ChaCha12Rng::seed_from_u64(420);
     for _ in 0..3 {
         println!("randomly generated 2x2 block: {:?}", utils::generate_2x2_block(&mut rng));
