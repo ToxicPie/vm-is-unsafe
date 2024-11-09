@@ -37,14 +37,14 @@ impl Distribution<Token> for Standard {
         }
         fn gen_adjective(num: u32) -> Token {
             match num {
-                0..25 => Token::Move,
-                25..100 => Token::Back,
-                100..125 => Token::Push,
-                125..150 => Token::Pull,
-                150..170 => Token::Swap,
-                170..210 => Token::Add,
-                210..240 => Token::Sub,
-                240..260 => Token::Or,
+                0..50 => Token::Move,
+                50..125 => Token::Back,
+                125..150 => Token::Push,
+                150..175 => Token::Pull,
+                175..190 => Token::Swap,
+                190..230 => Token::Add,
+                230..250 => Token::Sub,
+                250..260 => Token::Or,
                 260..280 => Token::Xor,
                 280..290 => Token::Shr,
                 290..300 => Token::Shl,
