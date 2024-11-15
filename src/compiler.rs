@@ -41,18 +41,16 @@ pub struct Instruction {
     pub src: Operand,
 }
 
+#[macro_export]
 macro_rules! operand {
     ([tmp]) => {
-        TMP_REG
-    };
-    ([win]) => {
-        WIN_REG
+        $crate::compiler::TMP_REG
     };
     ([R $reg:expr]) => {
-        Operand::Register($reg)
+        $crate::compiler::Operand::Register($reg)
     };
     (($imm:expr)) => {
-        Operand::Const($imm)
+        $crate::compiler::Operand::Const($imm)
     };
     ({$operand:expr}) => {
         $operand
@@ -62,17 +60,17 @@ macro_rules! operand {
 #[macro_export]
 macro_rules! instr {
     ($op:ident $x1:tt, $x2:tt) => {
-        Instruction {
-            opcode: Opcode::$op,
-            dst: operand!($x1),
-            src: operand!($x2),
+        $crate::compiler::Instruction {
+            opcode: $crate::compiler::Opcode::$op,
+            dst: $crate::operand!($x1),
+            src: $crate::operand!($x2),
         }
     };
     ($op:ident $x1:tt) => {
-        Instruction {
-            opcode: Opcode::$op,
-            dst: operand!((0)),
-            src: operand!($x1),
+        $crate::compiler::Instruction {
+            opcode: $crate::compiler::Opcode::$op,
+            dst: $crate::operand!((0)),
+            src: $crate::operand!($x1),
         }
     };
 }
@@ -81,7 +79,7 @@ macro_rules! instr {
 macro_rules! instrs {
     ($($op:ident $x1:tt $(, $x2:tt)?);* $(;)?) => {
         vec![
-            $(instr!($op $x1 $(, $x2)?),)*
+            $($crate::instr!($op $x1 $(, $x2)?),)*
         ]
     };
 }
@@ -95,7 +93,7 @@ impl From<&Noun> for Operand {
     }
 }
 
-const TMP_REG: Operand = Operand::Register(config::GENERAL_REGISTER_COUNT as u8);
+pub const TMP_REG: Operand = Operand::Register(config::GENERAL_REGISTER_COUNT as u8);
 const ALWAYS_CMP: Instruction = instr! { Cmpe (0x0), (0x0) };
 
 fn make_conditional(subject: &Noun, modifier: &PrepositionalPhrase) -> Instruction {
