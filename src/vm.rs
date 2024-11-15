@@ -73,11 +73,7 @@ impl Emulator {
         }
     }
     fn eval_condition(&self, condition: Instruction) -> bool {
-        let Instruction {
-            opcode,
-            dst,
-            src,
-        } = condition;
+        let Instruction { opcode, dst, src } = condition;
         let val1 = self.eval_operand(dst);
         let val2 = self.eval_operand(src);
         match opcode {
@@ -117,12 +113,8 @@ impl Emulator {
             let mut instruction_stream = instructions.into_iter();
             while let Some(Instruction { opcode, dst, src }) = instruction_stream.next() {
                 let ban_conditions = match src {
-                    Operand::Register(reg) => {
-                        &ban_conditions_regs[reg as usize][opcode as usize]
-                    }
-                    Operand::Const(num) => {
-                        &ban_conditions_nums[num as usize][opcode as usize]
-                    }
+                    Operand::Register(reg) => &ban_conditions_regs[reg as usize][opcode as usize],
+                    Operand::Const(num) => &ban_conditions_nums[num as usize][opcode as usize],
                 };
                 let banned = ban_conditions
                     .iter()
@@ -157,13 +149,13 @@ impl Emulator {
                         let src = self.eval_operand(src);
                         self.execute_const_or_reg(dst, |_dst| src);
                     }
-                    Opcode::Push if !banned  => {
+                    Opcode::Push if !banned => {
                         for idx in (1..config::STACK_SIZE as u8).rev() {
                             self.write_stack(idx, self.read_stack(idx - 1));
                         }
                         self.write_stack(0, self.eval_operand(src));
                     }
-                    Opcode::Pull if !banned  => {
+                    Opcode::Pull if !banned => {
                         let dst = self.read_stack(0);
                         self.execute_const_or_reg(src, |_src| dst);
                         for idx in 1..config::STACK_SIZE as u8 {
@@ -171,7 +163,7 @@ impl Emulator {
                         }
                         self.write_stack(config::STACK_SIZE as u8 - 1, 0);
                     }
-                    Opcode::Swap if !banned  => {
+                    Opcode::Swap if !banned => {
                         let val1 = self.eval_operand(dst);
                         let val2 = self.eval_operand(src);
                         self.execute_const_or_reg(dst, |_dst| val2);
